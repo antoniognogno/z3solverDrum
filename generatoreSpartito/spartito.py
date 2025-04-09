@@ -40,21 +40,49 @@ def crea_battuta_con_note_e_pause(note_durate):
     return m
 
 def crea_spartito_da_testo(testo_musicale):
-    s = stream.Stream()
     
-    #Battuta 1, in 4/4
+    s = stream.Score()
+    p = stream.Part()
+    m = stream.Measure()
+    m.append(note.Note())
+    
     ts0 = meter.TimeSignature('4/4')
     s.append(ts0)
-    n1 = note.Note('G5')
-    n1.quarterLength = .5 #Ottavo
-    n2 = note.Note('C4')
-    n2.quarterLength = 0.75 #Ottavo
-    var = 1 
-    n3 = note.Note('C4', quarterLenght = var) # Quarto
-    s.append(n1)
-    s.append(n2)
-    s.append(n3)
+
+    notes = ['G5', 'C4', 'C4', 'C4', 'C4', 'C4']
+    durations = [1, 0.5, 0.5, 1, 1, 0.5, 1]
+
+    if len(notes) != len(durations):
+        print("Error: Notes and durations lists must have the same length.")
+    else:
+    # Iterate over notes and durations simultaneously using zip
+        for n_str, dur_val in zip(notes, durations):
+            # Create the note object with the correct keyword argument
+            nota = note.Note(n_str, quarterLength = dur_val) 
+            # Append the note to the measure/stream
+            m.append(nota)
+
+    p.append(m)
+    s.append(p)
+    s.insert(0, metadata.Metadata())
+    s.metadata.title = 'CCL Drum'
+    s.metadata.composer = 'Antonio'
     s.makeMeasures(inPlace=True)
+    
+    #Battuta 1, in 4/4
+    # ts0 = meter.TimeSignature('4/4')
+    # streams.append(ts0)
+    # n1 = note.Note('G5')
+    # n1.quarterLength = .5 #Ottavo
+    # n2 = note.Note('C4')
+    # n2.quarterLength = 0.75 #Ottavo
+    # var = 1 
+    # n3 = note.Note('C4', quarterLenght = var) # Quarto
+    # streams.append(s)
+    # streams.append(n1)
+    # streams.append(n2)
+    # streams.append(n3)
+    # streams.makeMeasures(inPlace=True)
     
 
     # p = stream.Part()
@@ -99,4 +127,5 @@ spartito.write('musicxml', output_file)
 output_file = os.path.join(script_dir, 'spartito.xml')
 print("Spartito creato e salvato in spartito.xml")
 s = converter.parse(output_file)
+midi_file = s.write('midi', fp='output.mid')
 s.show()
