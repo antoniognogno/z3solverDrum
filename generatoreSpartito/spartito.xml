@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise  PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <movement-title>Music21 Fragment</movement-title>
+  <identification>
+    <creator type="composer">Music21</creator>
+    <encoding>
+      <encoding-date>2025-04-11</encoding-date>
+      <software>music21 v.9.5.0</software>
+    </encoding>
+  </identification>
+  <defaults>
+    <scaling>
+      <millimeters>7</millimeters>
+      <tenths>40</tenths>
+    </scaling>
+  </defaults>
+  <part-list>
+    <score-part id="P263ac2945f0bd15cb5956bc82d281645">
+      <part-name>Bass Drum</part-name>
+      <part-abbreviation>B Dr</part-abbreviation>
+      <score-instrument id="Iea3e2f01a63d2bbd54771d70eb050508">
+        <instrument-name>Bass Drum</instrument-name>
+        <instrument-abbreviation>B Dr</instrument-abbreviation>
+      </score-instrument>
+      <score-instrument id="Id42b611826657cd69318c765c40abb8c">
+        <instrument-name>Snare Drum</instrument-name>
+        <instrument-abbreviation>Sn Dr</instrument-abbreviation>
+      </score-instrument>
+      <score-instrument id="I099e8e2401422dcab2910959a0b2c771">
+        <instrument-name>Hi-Hat Cymbal</instrument-name>
+        <instrument-abbreviation>Cym</instrument-abbreviation>
+      </score-instrument>
+      <midi-instrument id="Iea3e2f01a63d2bbd54771d70eb050508">
+        <midi-channel>10</midi-channel>
+        <midi-unpitched>36</midi-unpitched>
+      </midi-instrument>
+      <midi-instrument id="Id42b611826657cd69318c765c40abb8c">
+        <midi-channel>1</midi-channel>
+        <midi-unpitched>39</midi-unpitched>
+      </midi-instrument>
+      <midi-instrument id="I099e8e2401422dcab2910959a0b2c771">
+        <midi-channel>2</midi-channel>
+        <midi-unpitched>45</midi-unpitched>
+      </midi-instrument>
+    </score-part>
+  </part-list>
+  <!--=========================== Part 1 ===========================-->
+  <part id="P263ac2945f0bd15cb5956bc82d281645">
+    <!--========================= Measure 0 ==========================-->
+    <measure implicit="no" number="0">
+      <attributes>
+        <divisions>10080</divisions>
+      </attributes>
+      <note>
+        <pitch>
+          <step>C</step>
+          <octave>2</octave>
+        </pitch>
+        <duration>10080</duration>
+        <instrument id="I099e8e2401422dcab2910959a0b2c771" />
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch>
+          <step>G</step>
+          <octave>2</octave>
+        </pitch>
+        <duration>10080</duration>
+        <instrument id="I099e8e2401422dcab2910959a0b2c771" />
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch>
+          <step>F</step>
+          <octave>2</octave>
+        </pitch>
+        <duration>10080</duration>
+        <instrument id="I099e8e2401422dcab2910959a0b2c771" />
+        <type>quarter</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>

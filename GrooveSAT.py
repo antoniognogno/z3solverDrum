@@ -1,6 +1,12 @@
 import random
 from z3 import *
 
+def aggiungi_vincolo_probabilistico(solver, variabile, probabilita):
+    if random.random() < probabilita:
+        solver.add(variabile == True)
+    else:
+        solver.add(variabile == False)
+
 def definisci_vincoli_rock(solver, cassa, rullante, hihat):
     # Hi-hat (sugli ottavi)
     for t in [0, 2, 4, 6, 8, 10, 12, 14]:
@@ -9,21 +15,12 @@ def definisci_vincoli_rock(solver, cassa, rullante, hihat):
     # Cassa: sui downbeat (1 e 3) - con probabilità per una lieve variazione
     probabilita_cassa = 0.7
     for t in [0, 8]:
-        if random.random() < probabilita_cassa:
-            solver.add(cassa[t] == True)
-        else:
-            solver.add(cassa[t] == False)
+        aggiungi_vincolo_probabilistico(solver, cassa[t], probabilita_cassa)
 
     # Rullante: sui backbeat (2 e 4) - con probabilità
     probabilita_rullante = 0.8
     for t in [4, 12]:
-        if random.random() < probabilita_rullante:
-            solver.add(rullante[t] == True)
-        else:
-            solver.add(rullante[t] == False)
-
-import random
-from z3 import *
+        aggiungi_vincolo_probabilistico(solver, rullante[t], probabilita_rullante)
 
 #Bisogna torvare la giusta xombinazione fra probabilità e vincoli in quanto una combinazione non conforme fra i due rende spesso la soluzione difficile da trovare 
 def definisci_vincoli_jazz(solver, cassa, rullante, hihat):
@@ -36,50 +33,36 @@ def definisci_vincoli_jazz(solver, cassa, rullante, hihat):
     for t in [0, 4, 8, 12]:  # Primi ottavi (1° ___)
         probGenerata = random.random()
         print(f"La probabilità di suonare l'Hi-Hat forte è di {probGenerata * 100:.2f}% nel tempo t = {t}")
-        if probGenerata < probabilita_hihat_forte:
-            solver.add(hihat[t] == True)
-        else:
-            solver.add(hihat[t] == False)
+        aggiungi_vincolo_probabilistico(solver, hihat[t], probabilita_hihat_forte)
 
     for t in [2, 6, 10, 14]:  # Secondi ottavi (2° ___)
         probGenerata = random.random()
         print(f"La probabilità di suonare l'Hi-Hat debole è di {probGenerata * 100:.2f}% nel tempo t = {t}")
-        if probGenerata < probabilita_hihat_debole:
-            solver.add(hihat[t] == True)
-        else:
-            solver.add(hihat[t] == False)
-
-    # Probabilistic Swing Constraint: if H on beat, then H on and with swing
-    probabilita_swing = 1 # Probabilità che ci sia anche il secondo hi-hat
-    for t in [0, 4, 8, 12]: #For every primo t
+        aggiungi_vincolo_probabilistico(solver, hihat[t], probabilita_hihat_debole)
+    
+    # Swing probabilistico:
+    probabilita_swing = 0.2 # Probabilità che ci sia anche il secondo hi-hat
+    for t in [0, 4, 8, 12]: #Per ogni primo ottavo
+        # Genera una probabilità per decidere se applicare la regola di swing
         probGenerata = random.random()
         print(f"La probabilità di suonare lo swing è di {probGenerata * 100:.2f}% nel tempo t = {t}")
-        if hihat[t] == True:  # If the hihat in this t is on
-          if probGenerata < probabilita_swing: # With swing's probability
-            solver.add(hihat[t + 2] == True) # then add hihat to the "and" of that beat
-            solver.add(hihat[t + 3] == True)
+        if random.random() < probabilita_swing:
+            print(f"Regola di swing applicata per t={t}: Se hihat[{t}] suona, allora suonano anche hihat[{t+2}] e hihat[{t+3}]")
+            solver.add(Implies(hihat[t], And(hihat[t + 2] == True, hihat[t + 3] == True)))
+        else:
+            print(f"Regola di swing NON applicata per t={t} (per scelta probabilistica di Python)")
 
     # Cassa - Probabilistico
-    probabilita_cassa = 0.6  # Aumentiamo un po' la probabilità
+    probabilita_cassa = 0.6 
     for t in range(16):
         probGenerata = random.random()
-        if probGenerata < probabilita_cassa:
-            solver.add(cassa[t] == True)
-        else:
-            solver.add(cassa[t] == False)
+        aggiungi_vincolo_probabilistico(solver, cassa[t], probabilita_cassa)
 
     # Rullante - Probabilistico
-    probabilita_rullante = 0.5 # Aumentiamo un po' la probabilità
+    probabilita_rullante = 0.5
     for t in range(16):
         probGenerata = random.random()
-        if probGenerata < probabilita_rullante:
-            solver.add(rullante[t] == True) # Possibile rullante su qualsiasi sedicesimo
-        else:
-            solver.add(rullante[t] == False)
-
-    # Vincolo Opzionale: Evitare sovrapposizioni cassa-rullante (leggero)
-    # for t in range(16): # Questo era il vincolo vecchio
-    #    solver.add(Implies(cassa[t] == True, rullante[t] == False)) # Se cassa, allora non rullante (e viceversa)
+        aggiungi_vincolo_probabilistico(solver, rullante[t], probabilita_rullante)
 
 def definisci_vincoli_pop(solver, cassa, rullante, hihat):
     """Definisce vincoli per uno stile Pop di base (16esimi)."""
@@ -90,10 +73,7 @@ def definisci_vincoli_pop(solver, cassa, rullante, hihat):
     # Cassa: Spesso su tutti e quattro i battiti (o sincopata)
     probabilita_cassa_forte = 0.7  # Alta probabilità per i downbeat
     for t in [0, 4, 8, 12]:  # Cassa sui 4 quarti (o quasi)
-        if random.random() < probabilita_cassa_forte:
-            solver.add(cassa[t] == True)
-        else:
-            solver.add(cassa[t] == False)
+        aggiungi_vincolo_probabilistico(solver, cassa[t], probabilita_cassa_forte)
 
     # Rullante: Forte sul backbeat
     solver.add(rullante[4])
@@ -119,7 +99,7 @@ vincoliStile = {
     "blues": definisci_vincoli_blues,
 }
 
-# Solver (ora usiamo Solver invece di Optimize)
+# Solver
 solver = Solver()
 
 # Variabili per gli strumenti in ogni sedicesimo (0-15)
@@ -145,7 +125,7 @@ else:
     print("Errore: Funzione di vincoli non trovata per lo stile scelto.")
 
 
-# Risolvi e visualizza (ora con Solver)
+# Risolvi e visualizza
 if solver.check() == sat:
     model = solver.model()
     print(f"\nRitmo generato per stile: {stile_scelto} (una soluzione valida):")
@@ -158,6 +138,7 @@ if solver.check() == sat:
         if (t + 1) % 4 == 0: # 4 sedicesimi per quarto
             print("| ", end="")
     print()
-    print("1   i   e   a   | 2   i   e   a   | 3   i   e   a   | 4   i   e   a   |") # Add the markers
+
+    print("1   i   e   a   | 2   i   e   a   | 3   i   e   a   | 4   i   e   a   |") 
 else:
     print(f"Nessuna soluzione trovata per {stile_scelto}.")
