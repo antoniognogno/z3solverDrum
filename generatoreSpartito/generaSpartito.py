@@ -58,31 +58,23 @@ import os
 
 def creaListaNote(groove):    
     # Il tuo mapping da caratteri a oggetti music21
-    # Nota: Questi oggetti Note/Rest vengono creati UNA VOLTA qui.
     note_mapping = {
         'H': note.Note('G5'), # Sol alto (Hihat chiuso)
         'K': note.Note('C4'), # Do centrale (Kick/Cassa) - Ho usato C4 come standard per la cassa
         'S': note.Note('E4'), # Mi (Snare/Rullante) - Spesso si usa D4 o E4 per il rullante
         '_': note.Rest()      # Pausa
     }
-    # --- Modifica Note/Rest nel mapping sopra se hai pitch specifici in mente ---
-
+    
     # Lista per contenere la sequenza di oggetti music21 risultante
     music_sequence = []
 
     # Itera su ogni simbolo nel groove
     for symbol in groove:
         # Cerca il simbolo nel mapping
-        # Usiamo .get() per sicurezza: restituisce None se il simbolo non è nel mapping
+        
         music_object = note_mapping.get(symbol)
 
         if music_object is not None:
-            # Se il simbolo è stato trovato nel mapping, aggiungi l'oggetto corrispondente
-            # ATTENZIONE: Stai aggiungendo la *stessa* istanza dell'oggetto Nota/Pausa
-            # presa dalla mappa ogni volta che incontri lo stesso simbolo.
-            # Se prevedi di modificare individualmente le durate o altre proprietà
-            # *dopo* questo ciclo, potresti aver bisogno di creare copie (con copy.deepcopy)
-            # o di creare gli oggetti al momento nel ciclo. Per ora, manteniamo semplice.
             music_sequence.append(music_object)
         else:
             # Gestisci il caso in cui un simbolo nel groove non sia presente nel mapping
