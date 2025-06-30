@@ -2,21 +2,22 @@ import random
 from z3 import *
 from z3 import Optimize
 
-# =======================================================
-#               0. CLASSE PER I PARAMETRI (CORRETTA)
-# =======================================================
 class ParametriStile:
     def __init__(self):
-        # Valori predefiniti (da 0 a 100) - Nomi resi coerenti (camelCase)
-        self.forzaDownbeat = 95
-        self.forzaBackbeat = 98
-        self.forzaSwing = 90
-        self.densitaComping = 15 # Corretto da densita_comping
+        #Rock
+        self.forzaDoppiaCassa = 95
+        self.forzaDoppiaCassaFinale = 98
         self.densitaSincopi = 25
         self.preferenzaSilenzio = 20
+        self.forzaCrash = 1  # Forza del crash iniziale o finale
+        #Pop
+        self.forzaOpenHiHat = 75 
+        
+        self.densitaComping = 15
+        self.forzaSwing = 90
 
 # =======================================================
-#               1. FUNZIONI DI SUPPORTO
+# 1. Procedure/Funzioni ausiliarie
 # =======================================================
 def aggiungiPreferenza(optimizer, espressioneBooleana, peso):
     if peso > 0:
@@ -37,16 +38,34 @@ def valoreInput(messaggio, default):
         print(f"Input '{val}' non è un numero valido. Verrà usato il default: {default}")
         return default
 
+def valoreInputBooleano(messaggio, defaultChar):
+    #Chiede un booleana all'utente (es. 's'/'o')."""
+    scelta = input(f"- {messaggio} (default: {defaultChar}): ").lower().strip()
+    if not scelta:
+        return defaultChar
+    return scelta[0] # Prende solo il primo carattere
+
+
 # =======================================================
-#               2. FUNZIONI PER CHIEDERE I PARAMETRI
+# 2. Parametri per stile
 # =======================================================
 def parametriRock():
     print("\nPersonalizza i Pesi per lo Stile ROCK")
     params = ParametriStile()
-    params.forzaDownbeat = valoreInput("Forza Cassa su 1 & 3", params.forzaDownbeat)
-    params.forzaBackbeat = valoreInput("Forza Rullante su 2 & 4", params.forzaBackbeat)
-    params.densitaSincopi = valoreInput("Presenza di sincopi di cassa", params.densitaSincopi)
+    params.forzaDoppiaCassa = valoreInput("Forza Doppia Cassa su '3 e' (t=10)", params.forzaDoppiaCassa)
+    params.forzaDoppiaCassaFinale = valoreInput("Forza Cassa su '4 e' (t=15)", params.forzaDoppiaCassaFinale)
+    params.densitaSincopi = valoreInput("Presenza di altre sincopi di cassa", params.densitaSincopi)
+    params.forzaCrash = valoreInput("Forza Crash sul primo quarto o sull'ultimo (t=0 o t=14) (>90 se vuoi inserirlo)", params.forzaCrash)
     params.preferenzaSilenzio = valoreInput("Tendenza al silenzio", params.preferenzaSilenzio)
+    return params
+
+def parametriPop():
+    print("\nPersonalizza i Pesi per lo Stile POP")
+    params = ParametriStile()
+    params.forzaDoppiaCassa = valoreInput("Forza Cassa sui quarti", params.forzaDoppiaCassa)
+    params.densitaSincopi = valoreInput("Presenza di sincopi", params.densitaSincopi)
+    params.forzaOpenHiHat = valoreInput("Forza Open Hi-Hat di anticipo (su '4a')", params.forzaOpenHiHat)
+    params.patternHiHat = valoreInputBooleano("Pattern Hi-Hat: (o)ttavi o (s)edicesimi?", 'o')
     return params
 
 def parametriJazz():
@@ -57,45 +76,86 @@ def parametriJazz():
     params.preferenzaSilenzio = valoreInput("Tendenza al silenzio", 5)
     return params
 
-def parametriPop():
-    print("\nPersonalizza i Pesi per lo Stile POP")
-    params = ParametriStile()
-    params.forzaDownbeat = valoreInput("Forza Cassa sui quarti", params.forzaDownbeat)
-    params.densitaSincopi = valoreInput("Presenza di sincopi", params.densitaSincopi)
-    return params
 
 def parametriBlues():
     print("\nPersonalizza i Pesi per lo Stile BLUES")
     params = ParametriStile()
     params.forzaSwing = valoreInput("Definizione dello Shuffle", params.forzaSwing)
-    params.forzaBackbeat = valoreInput("Forza Rullante su 2 & 4", params.forzaBackbeat)
+    params.forzaDoppiaCassaFinale = valoreInput("Forza Rullante su 2 & 4", params.forzaDoppiaCassaFinale)
     params.densitaSincopi = valoreInput("Presenza di sincopi (pickup)", params.densitaSincopi)
     return params
 
 # =======================================================
-#               3. DEFINIZIONI DEGLI STILI (CORRETTE)
+# 3. Applicazione vincoli per stile
 # =======================================================
 
-def vincoliRock(optimizer, cassa, rullante, hihat, params):
-    # Vincoli Rigidi
-    for t in [0, 2, 4, 6, 8, 10, 12, 14]:
+def vincoliRock(optimizer, strumenti, params):
+    hihat = strumenti['hihat']
+    rullante = strumenti['rullante']
+    cassa = strumenti['cassa']
+    crash = strumenti['crash']
+
+
+    for t in [2, 4, 6, 8, 10, 12]:
         optimizer.add(hihat[t] == True)
-    # Vincoli Morbidi
+
+    #Scelgo se mettere un crash o hi-hat sul primo quarto o sull'ultimo
+    if random.random() < 0.4:
+        print("Preferenza crash impostata su t=0")
+        aggiungiPreferenza(optimizer, And(crash[0] == True, crash[14] == False), peso=params.forzaCrash)
+    else:
+        print("Preferenza crash impostata su t=14")
+        aggiungiPreferenza(optimizer, And(crash[0] == False, crash[14] == True), peso=params.forzaCrash)
+    
+    for t in [0, 14]:
+        aggiungiPreferenza(optimizer, hihat[t] == True, peso=90)
+
     for t in [0, 8]:
-        aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.forzaDownbeat)
+        optimizer.add(cassa[t] == True) # Kick sul 1 e 3
     for t in [4, 12]:
-        aggiungiPreferenza(optimizer, rullante[t] == True, peso=params.forzaBackbeat)
-    # Sincopi per variazioni
-    aggiungiPreferenza(optimizer, cassa[6] == True, peso=params.densitaSincopi)
-    aggiungiPreferenza(optimizer, cassa[14] == True, peso=int(params.densitaSincopi * 0.8))
-    # Preferenza per il silenzio
+        optimizer.add(rullante[t] == True) # Snare sul 2 e 4
+
+    aggiungiPreferenza(optimizer, cassa[10] == True, peso=params.forzaDoppiaCassa)
+    aggiungiPreferenza(optimizer, cassa[15] == True, peso=params.forzaDoppiaCassaFinale)
+    for t in [3, 7, 11, 15]:
+        aggiungiPreferenza(optimizer, Or(cassa[t] == True, rullante[t] == True), peso=params.densitaSincopi) # Sincopi
+
+
     for t in range(16):
-        if t not in [0, 6, 8, 14]:
+        # Dove non ci aspettiamo la cassa, preferiamo il silenzio.
+        if t not in [0, 6, 8, 10, 15]:
             aggiungiPreferenza(optimizer, cassa[t] == False, peso=params.preferenzaSilenzio)
+        # Dove non ci aspettiamo il rullante, preferiamo il silenzio.
         if t not in [4, 12]:
             aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
 
-def vincoliJazz(optimizer, cassa, rullante, hihat, params):
+
+
+def vincoliPop(optimizer, strumenti, params):
+
+    hihat, rullante, cassa, crash, openhihat = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash'], strumenti['openhihat']
+    for t in [0, 2, 4, 6, 8, 10, 12, 14]:
+        optimizer.add(hihat[t] == True)
+        #cassa dritta sui quarti
+        if (t%4) == 0:
+            optimizer.add(cassa[t] == True)
+        #rullante su 2 e 4
+        if t == 4 or t == 12:
+            optimizer.add(rullante[t] == True)
+
+    if params.patternHiHat == 's':
+        print("Pattern Hi-Hat impostato in 16esimi.")
+        # Se l'utente vuole i 16esimi, questa è una regola quasi rigida
+        for t in range(16):
+            aggiungiPreferenza(optimizer, hihat[t] == True, peso=varia(90))
+    else: # Default a ottavi
+        print("Pattern Hi-Hat impostato a Ottavi.")
+        for t in [0, 2, 4, 6, 8, 10, 12, 14]:
+            aggiungiPreferenza(optimizer, hihat[t] == True, peso=varia(95))
+    
+
+def vincoliJazz(optimizer, strumenti, params):
+    hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
     optimizer.add(hihat[4] == True)
     optimizer.add(hihat[12] == True)
     optimizer.add(Implies(hihat[4], Not(rullante[4])))
@@ -112,79 +172,102 @@ def vincoliJazz(optimizer, cassa, rullante, hihat, params):
         aggiungiPreferenza(optimizer, cassa[t] == False, peso=params.preferenzaSilenzio)
         aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
 
-def vincoliPop(optimizer, cassa, rullante, hihat, params):
-    for t in [0, 2, 4, 6, 8, 10, 12, 14]:
-        optimizer.add(hihat[t] == True)
-    optimizer.add(rullante[4] == True)
-    optimizer.add(rullante[12] == True)
-    for t in [0, 4, 8, 12]:
-        aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.forzaDownbeat)
-    for t in [3, 7, 11, 15]:
-        aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.densitaSincopi)
 
-def vincoliBlues(optimizer, cassa, rullante, hihat, params):
+def vincoliBlues(optimizer, strumenti, params):
+    hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
     for t in [0, 4, 8, 12]:
         aggiungiPreferenza(optimizer, hihat[t] == True, peso=params.forzaSwing)
         aggiungiPreferenza(optimizer, hihat[t + 2] == True, peso=params.forzaSwing)
         aggiungiPreferenza(optimizer, hihat[t + 1] == False, peso=int(params.forzaSwing * 0.8))
-    aggiungiPreferenza(optimizer, cassa[0] == True, peso=params.forzaDownbeat)
-    aggiungiPreferenza(optimizer, cassa[8] == True, peso=params.forzaDownbeat)
-    aggiungiPreferenza(optimizer, rullante[4] == True, peso=params.forzaBackbeat)
-    aggiungiPreferenza(optimizer, rullante[12] == True, peso=params.forzaBackbeat)
+
+    aggiungiPreferenza(optimizer, cassa[0] == True, peso=params.forzaDoppiaCassa)
+    aggiungiPreferenza(optimizer, cassa[8] == True, peso=params.forzaDoppiaCassa)
+    aggiungiPreferenza(optimizer, rullante[4] == True, peso=params.forzaDoppiaCassaFinale)
+    aggiungiPreferenza(optimizer, rullante[12] == True, peso=params.forzaDoppiaCassaFinale)
     aggiungiPreferenza(optimizer, cassa[15] == True, peso=params.densitaSincopi)
 
 # =======================================================
-#               4. BLOCCO PRINCIPALE (CORRETTO)
+# 4. Main Program
 # =======================================================
 
-vincoliStile = {"rock": vincoliRock, "jazz": vincoliJazz, "pop": vincoliPop, "blues": vincoliBlues}
-parametriPerStile = {"rock": parametriRock, "jazz": parametriJazz, "pop": parametriPop, "blues": parametriBlues}
+while True:
+    print("\n--- Generatore di Ritmi per Batteria ---")
+    vincoliStile = {"rock": vincoliRock, "jazz": vincoliJazz, "pop": vincoliPop, "blues": vincoliBlues}
+    parametriPerStile = {"rock": parametriRock, "jazz": parametriJazz, "pop": parametriPop, "blues": parametriBlues}
 
-# 1. Inizializzazione
-optimizer = Optimize()
-cassa = [Bool(f'cassa_{t}') for t in range(16)]
-rullante = [Bool(f'rullante_{t}') for t in range(16)]
-hihat = [Bool(f'hihat_{t}') for t in range(16)]
+    #inizializzazione
+    optimizer = Optimize()
+    strumenti = {
+        'cassa':   [Bool(f'cassa_{t}') for t in range(16)],
+        'rullante': [Bool(f'rullante_{t}') for t in range(16)],
+        'hihat':    [Bool(f'hihat_{t}') for t in range(16)],
+        'crash':    [Bool(f'crash_{t}') for t in range(16)],
+        'openhihat':  [Bool(f'openhihat_{t}') for t in range(16)], # NUOVO: Hi-Hat Aperto
+        'tom1':     [Bool(f'tom1_{t}') for t in range(16)],
+        'tom2':     [Bool(f'tom2_{t}') for t in range(16)]
+    }
+    
+    simboli = {
+        'crash': 'C',
+        'hihat': 'H',
+        'rullante': 'S',
+        'cassa': 'K',
+        'openhihat': 'O',
+        'tom1': 'T1',
+        'tom2': 'T2'
+    }
+    
+    hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
+    #Input utente stile
+    stiliDisponibili = list(vincoliStile.keys())
+    print(f"Stili disponibili: {stiliDisponibili}")
+    stileScelto = input("Inserisci lo stile desiderato: ").lower()
+    if stileScelto not in stiliDisponibili:
+        print(f"Stile '{stileScelto}' non valido. Utilizzo stile 'rock' predefinito.")
+        stileScelto = "rock"
 
-# 2. Scelta Stile
-stiliDisponibili = list(vincoliStile.keys())
-print(f"Stili disponibili: {stiliDisponibili}")
-stileScelto = input("Inserisci lo stile desiderato: ").lower()
-if stileScelto not in stiliDisponibili:
-    print(f"Stile '{stileScelto}' non valido. Utilizzo stile 'rock' predefinito.")
-    stileScelto = "rock"
+    #Richiesta parametri
+    funzioneParametri = parametriPerStile.get(stileScelto)
+    parametriUtente = funzioneParametri() if funzioneParametri else ParametriStile()
 
-# 3. Richiesta Parametri
-funzioneParametri = parametriPerStile.get(stileScelto)
-parametriUtente = funzioneParametri() if funzioneParametri else ParametriStile()
+    #Applicazione vincoli
 
-# 4. Applicazione Vincoli
-funzioneVincoli = vincoliStile.get(stileScelto)
-if funzioneVincoli:
-    print(f"\nApplicando vincoli e preferenze per lo stile: {stileScelto}")
-    funzioneVincoli(optimizer, cassa, rullante, hihat, parametriUtente)
-else:
-    print(f"Errore: Funzione di vincoli non trovata per lo stile '{stileScelto}'.")
-    exit()
-
-# 4. Risoluzione e Visualizzazione
-print("Cercando la soluzione ottimale")
-if optimizer.check() == sat:
-    model = optimizer.model()
-
-    print(f"\nRitmo generato per stile: {stileScelto} (una soluzione valida):")
-    print()
+    #Vincoli generici
+    print(f"\nApplicando vincoli generici:")
     for t in range(16):
+        optimizer.add(Implies(strumenti['crash'][t], Not(strumenti['hihat'][t]))) #Se suono il crash, non suono l'hihat
         
-        k = 'K ' if model.evaluate(cassa[t]) == BoolVal(True) else '_ '
-        s = 'S ' if model.evaluate(rullante[t]) == BoolVal(True) else '_ '
-        h = 'H ' if model.evaluate(hihat[t]) == BoolVal(True) else '_ '
 
-        print(f"{h}{k}{s}", end="  ")
-        if (t + 1) % 4 == 0: # 4 sedicesimi per quarto
-            print("| ", end="")
-    print()
-    print("1       i       e       a       | 2       i       e       a       | 3       i       e       a       | 4       i       e       a       |") 
+    funzioneVincoli = vincoliStile.get(stileScelto)
+    if funzioneVincoli:
+        print(f"\nApplicando vincoli e preferenze per lo stile: {stileScelto}")
+        funzioneVincoli(optimizer, strumenti, parametriUtente)
+    else:
+        print(f"Errore: Funzione di vincoli non trovata per lo stile '{stileScelto}'.")
+        exit()
 
-else:
-    print(f"Nessuna soluzione trovata per {stileScelto}.")
+    #sat e Visualizzazione
+    print("Cercando la soluzione ottimale")
+    if optimizer.check() == sat:
+        model = optimizer.model()
+
+        print(f"\nRitmo generato per stile: {stileScelto} (una soluzione valida):")
+        print()
+        for t in range(16):    
+            k = 'K ' if is_true(model.evaluate(cassa[t])) else '_ '
+            s = 'S ' if is_true(model.evaluate(rullante[t])) else '_ '
+            if is_true(model.evaluate(crash[t])):
+                h = 'C '
+            elif is_true(model.evaluate(hihat[t])):
+                h = 'H '
+            else:
+                h = '_ '
+
+            print(f"{h}{k}{s}", end="  ")
+            if (t + 1) % 4 == 0:
+                print("| ", end="")
+        print()
+        print("1       i       e       a       | 2       i       e       a       | 3       i       e       a       | 4       i       e       a       |") 
+
+    else:
+        print(f"Nessuna soluzione trovata per {stileScelto}.")
