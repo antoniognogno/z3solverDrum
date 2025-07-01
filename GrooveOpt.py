@@ -19,9 +19,10 @@ class ParametriStile:
         self.densitaSincopiCassa = 20
         self.densitaSincopiRullante = 20
         self.forzaOpenHiHat = 98
-        
-        self.densitaComping = 15
+        #Jazz
+        self.densitaComping = 50
         self.forzaSwing = 90
+        self.densitaToms = 20
 
 # =======================================================
 # 1. Procedure/Funzioni ausiliarie
@@ -138,6 +139,7 @@ def vincoliRock(optimizer, strumenti, params):
             aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
 
 
+#Bugs: il crash e l'OpenHIhat non sono gestiti correttamente e suonano sempre
 def vincoliPop(optimizer, strumenti, params):
 
     cassa = strumenti['cassa']
@@ -178,19 +180,92 @@ def vincoliPop(optimizer, strumenti, params):
 
     # 7. Preferenza per il Crash 
     aggiungiPreferenza(optimizer, crash[posCrash] == True, peso=params.forzaCrash)
-    optimizer.add(Implies(crash[posCrash], Not(hihat[posCrash]))) # Se suono il crash, non suono l'hihat chiuso
-    optimizer.add(Implies(Not(crash[posCrash]), hihat[posCrash] == True)) # Se non suono il crash, suono l'hihat chiuso sul primo quarto
-    
+    optimizer.add(Implies(crash[posCrash], Not(hihat[posCrash])))
+    optimizer.add(Implies(Not(crash[posCrash]), hihat[posCrash] == True))
     
     # 8. Sincopi di cassa per rendere il ritmo più movimentato
     for t in [7, 15]: # '2a' e '4a'
         aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.densitaSincopiCassa)
         aggiungiPreferenza(optimizer, rullante[t] == True, peso=params.densitaSincopiRullante)
         optimizer.add(Or(Not(cassa[t]), Not(rullante[t])))
-    
+
+    for t in range(16):
+        if t in [posOpenHiHat, posCrash]:
+            optimizer.add(Or((Implies(Not(openhihat[t]), hihat[t] == True), Implies(Not(crash[t]), hihat[t] == True)))) # Se non suono l'open hi-hat o il crash, suono l'hihat chiuso
 
 def vincoliJazz(optimizer, strumenti, params):
-    return 0
+    cassa = strumenti['cassa']
+    rullante = strumenti['rullante']
+    hihat = strumenti['hihat']
+    openhihat = strumenti['openhihat']
+    crash = strumenti['crash']
+    ride = strumenti['ride']
+    tom1 = strumenti['tom1']
+    tom2 = strumenti['tom2']    
+
+    for t in range(16):
+        # Il ride e l'hi-hat (suonato con la bacchetta) sono mutualmente esclusivi.
+        optimizer.add(AtMost(ride[t], hihat[t], 1))
+        # Un crash esclude gli altri piatti.
+        optimizer.add(Implies(crash[t], And(Not(ride[t]), Not(hihat[t]), Not(openhihat[t]))))
+        
+
+
+    #hi hat per scandire il tempo
+    for t in [4, 12]:
+        optimizer.add(hihat[t] == True) # Chick secco sul 2 e 4
+        
+        # In questi punti, la cassa e il rullante e i toms non devono suonare.
+        optimizer.add(cassa[t] == False)
+        optimizer.add(rullante[t] == False)
+        optimizer.add(strumenti['tom1'][t] == False)
+        optimizer.add(strumenti['tom2'][t] == False)
+    
+    for t in range(15): # Fino al penultimo tempo
+        # È fortemente preferibile che cassa[t] e cassa[t+1] non siano entrambi True
+        aggiungiPreferenza(optimizer, Not(And(cassa[t], cassa[t+1])), peso=90)
+    
+        #Ghost notes per il rullante
+        if t in [0, 8]:
+            aggiungiPreferenza(optimizer, Implies(ride[t], rullante[t+1]), peso=30)
+
+    for t in [0, 8]:
+        aggiungiPreferenza(optimizer, ride[t] == True, peso=params.forzaSwing)
+        aggiungiPreferenza(optimizer, ride[t + 2] == True, peso=params.forzaSwing)
+        aggiungiPreferenza(optimizer, ride[t + 1] == False, peso=params.forzaSwing)
+
+    # 1. Vincolo di cardinalità per i tamburi: al massimo 2 alla volta
+    for t in range(16):
+        optimizer.add(AtMost(rullante[t], tom1[t], tom2[t], 2))
+
+    # 2. Logica del Comping Sparso
+    probabilitaCompingCassa = params.densitaComping / 100.0
+    probabilitaCompingRullante = (params.densitaComping * 0.7) / 100.0
+    # La densità dei tom è derivata da quella generale
+    probabilitaCompingTom1 = (params.densitaComping * 0.5) / 100.0
+    probabilitaCompingTom2 = (params.densitaComping * 0.4) / 100.0
+
+    for t in range(16):
+        if t not in [4, 12]: # Evitiamo il comping dove c'è l'open-hat fisso
+            # Cassa
+            if random.random() < probabilitaCompingCassa:
+                aggiungiPreferenza(optimizer, cassa[t] == True, peso=50)
+            # Rullante
+            if random.random() < probabilitaCompingRullante:
+                aggiungiPreferenza(optimizer, rullante[t] == True, peso=45)
+            # Tom 1
+            if random.random() < probabilitaCompingTom1:
+                aggiungiPreferenza(optimizer, tom1[t] == True, peso=40)
+            # Tom 2
+            if random.random() < probabilitaCompingTom2:
+                aggiungiPreferenza(optimizer, tom2[t] == True, peso=40)
+
+    # 4. Preferenza Generale per il Silenzio
+    for t in range(16):
+        aggiungiPreferenza(optimizer, cassa[t] == False, peso=params.preferenzaSilenzio)
+        aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
+        aggiungiPreferenza(optimizer, tom1[t] == False, peso=params.preferenzaSilenzio)
+        aggiungiPreferenza(optimizer, tom2[t] == False, peso=params.preferenzaSilenzio)
 
 def vincoliBlues(optimizer, strumenti, params):
     hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
@@ -221,9 +296,10 @@ while True:
         'rullante': [Bool(f'rullante_{t}') for t in range(16)],
         'hihat':    [Bool(f'hihat_{t}') for t in range(16)],
         'crash':    [Bool(f'crash_{t}') for t in range(16)],
-        'openhihat':  [Bool(f'openhihat_{t}') for t in range(16)], # NUOVO: Hi-Hat Aperto
+        'openhihat':  [Bool(f'openhihat_{t}') for t in range(16)],
         'tom1':     [Bool(f'tom1_{t}') for t in range(16)],
-        'tom2':     [Bool(f'tom2_{t}') for t in range(16)]
+        'tom2':     [Bool(f'tom2_{t}') for t in range(16)],
+        'ride':    [Bool(f'ride_{t}') for t in range(16)] 
     }
     
     simboli = {
@@ -233,7 +309,8 @@ while True:
         'cassa': 'K',
         'openhihat': 'O',
         'tom1': 'T1',
-        'tom2': 'T2'
+        'tom2': 'T2',
+        'ride': 'R'
     }
     
     colori = {
@@ -243,7 +320,8 @@ while True:
         'openhat':  Fore.CYAN + Style.BRIGHT,   # Ciano brillante
         'crash':    Fore.MAGENTA + Style.BRIGHT,# Magenta brillante
         'tom1':     Fore.GREEN,                 # Verde
-        'tom2':     Fore.GREEN + Style.BRIGHT   # Verde brillante
+        'tom2':     Fore.GREEN + Style.BRIGHT,   # Verde brillante
+        'ride':     Fore.BLUE + Style.BRIGHT      # Blu brillante
     }
 
     hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
@@ -253,7 +331,7 @@ while True:
     stileScelto = input("Inserisci lo stile desiderato: ").lower()
     if stileScelto not in stiliDisponibili:
         print(f"Stile '{stileScelto}' non valido. Utilizzo stile 'pop' predefinito.")
-        stileScelto = "pop"
+        stileScelto = "jazz"
 
     #Richiesta parametri
     funzioneParametri = parametriPerStile.get(stileScelto)
@@ -288,11 +366,11 @@ while True:
         # Dizionario dei simboli per ogni strumento
         simboli = {
             'crash': 'C', 'openhihat':  'O', 'hihat': 'H', 
-            'rullante': 'S', 'tom1': '1', 'tom2': '2', 'cassa': 'K'
+            'rullante': 'S', 'tom1': '1', 'tom2': '2', 'cassa': 'K', 'ride': 'R'
         }
         
         # Lista degli strumenti nell'ordine in cui vuoi stamparli
-        ordine_stampa = ['crash', 'openhihat', 'hihat', 'rullante', 'cassa', 'tom1', 'tom2']
+        ordine_stampa = ['crash', 'ride', 'openhihat', 'hihat', 'rullante', 'cassa', 'tom1', 'tom2']
         
         # Itera su ogni strumento e stampa la sua riga
         for nome_strumento in ordine_stampa:
