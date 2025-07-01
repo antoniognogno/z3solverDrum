@@ -2,6 +2,11 @@ import random
 from z3 import *
 from z3 import Optimize
 
+from colorama import init, Fore, Style
+
+# Inizializza colorama per funzionare anche su Windows
+init(autoreset=True)
+
 class ParametriStile:
     def __init__(self):
         #Rock
@@ -11,7 +16,9 @@ class ParametriStile:
         self.preferenzaSilenzio = 20
         self.forzaCrash = 1  # Forza del crash iniziale o finale
         #Pop
-        self.forzaOpenHiHat = 75 
+        self.densitaSincopiCassa = 20
+        self.densitaSincopiRullante = 20
+        self.forzaOpenHiHat = 98
         
         self.densitaComping = 15
         self.forzaSwing = 90
@@ -62,10 +69,11 @@ def parametriRock():
 def parametriPop():
     print("\nPersonalizza i Pesi per lo Stile POP")
     params = ParametriStile()
-    params.forzaDoppiaCassa = valoreInput("Forza Cassa sui quarti", params.forzaDoppiaCassa)
-    params.densitaSincopi = valoreInput("Presenza di sincopi", params.densitaSincopi)
-    params.forzaOpenHiHat = valoreInput("Forza Open Hi-Hat di anticipo (su '4a')", params.forzaOpenHiHat)
     params.patternHiHat = valoreInputBooleano("Pattern Hi-Hat: (o)ttavi o (s)edicesimi?", 'o')
+    params.densitaSincopiCassa = valoreInput("Presenza di sincopi della cassa", params.densitaSincopiCassa)
+    params.densitaSincopiRullante = valoreInput("Presenza di sincopi sul rullante", params.densitaSincopiRullante)
+    params.forzaOpenHiHat = valoreInput("Forza Open Hi-Hat di anticipo (su '4a')", params.forzaOpenHiHat)
+    params.forzaCrash = valoreInput("Forza Crash sul primo quarto (t=0) (>90 se vuoi inserirlo)", params.forzaCrash)
     return params
 
 def parametriJazz():
@@ -130,28 +138,55 @@ def vincoliRock(optimizer, strumenti, params):
             aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
 
 
-
 def vincoliPop(optimizer, strumenti, params):
 
-    hihat, rullante, cassa, crash, openhihat = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash'], strumenti['openhihat']
-    for t in [0, 2, 4, 6, 8, 10, 12, 14]:
-        optimizer.add(hihat[t] == True)
-        #cassa dritta sui quarti
-        if (t%4) == 0:
-            optimizer.add(cassa[t] == True)
-        #rullante su 2 e 4
-        if t == 4 or t == 12:
-            optimizer.add(rullante[t] == True)
+    cassa = strumenti['cassa']
+    rullante = strumenti['rullante']
+    hihat = strumenti['hihat']
+    openhihat = strumenti['openhihat']
+    crash = strumenti['crash']
+
+
+    # 1. Cassa in quarti.
+    for t in [0, 4, 8, 12]:
+        optimizer.add(cassa[t] == True)
+        
+    # 2. Rullante su 2 e 4.
+    for t in [4, 12]:
+        optimizer.add(rullante[t] == True)
+
+    # 3. Definiamo la posizione dell'open hi-hat per chiarezza
+    posOpenHiHat = 14
+    posCrash = 0
 
     if params.patternHiHat == 's':
-        print("Pattern Hi-Hat impostato in 16esimi.")
-        # Se l'utente vuole i 16esimi, questa è una regola quasi rigida
+        print("Pattern Hi-Hat impostato a 16esimi.")
         for t in range(16):
-            aggiungiPreferenza(optimizer, hihat[t] == True, peso=varia(90))
+            if t != posOpenHiHat and t != posCrash and t != (posOpenHiHat+1): # Escludo il 14 e 15 (posizione dell'open hi-hat)
+                optimizer.add(hihat[t] == True)
     else: # Default a ottavi
         print("Pattern Hi-Hat impostato a Ottavi.")
-        for t in [0, 2, 4, 6, 8, 10, 12, 14]:
-            aggiungiPreferenza(optimizer, hihat[t] == True, peso=varia(95))
+        for t in [0, 2, 4, 6, 8, 10, 12]: # Escludo il 14!
+            optimizer.add(hihat[t] == True)
+
+
+    #Preferenze e vincoli per l'Open Hi-Hat
+    aggiungiPreferenza(optimizer, openhihat[posOpenHiHat] == True, peso=params.forzaOpenHiHat)
+    
+    optimizer.add(Implies(openhihat[posOpenHiHat] == True, And(Not(hihat[posOpenHiHat]), Not(hihat[posOpenHiHat + 1])))) # Se suono l'open hi-hat, non suono l'hihat chiuso (neanche sul successivo)
+    optimizer.add(Implies(Not(openhihat[posOpenHiHat]), hihat[posOpenHiHat] == True)) # Se non suono l'open hi-hat, suono l'hihat chiuso
+
+    # 7. Preferenza per il Crash 
+    aggiungiPreferenza(optimizer, crash[posCrash] == True, peso=params.forzaCrash)
+    optimizer.add(Implies(crash[posCrash], Not(hihat[posCrash]))) # Se suono il crash, non suono l'hihat chiuso
+    optimizer.add(Implies(Not(crash[posCrash]), hihat[posCrash] == True)) # Se non suono il crash, suono l'hihat chiuso sul primo quarto
+    
+    
+    # 8. Sincopi di cassa per rendere il ritmo più movimentato
+    for t in [7, 15]: # '2a' e '4a'
+        aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.densitaSincopiCassa)
+        aggiungiPreferenza(optimizer, rullante[t] == True, peso=params.densitaSincopiRullante)
+        optimizer.add(Implies(cassa[t], Not(rullante[t]))) # Se suono la cassa, non suono il rullante (e viceversa)
     
 
 def vincoliJazz(optimizer, strumenti, params):
@@ -217,14 +252,24 @@ while True:
         'tom2': 'T2'
     }
     
+    colori = {
+        'cassa':   Fore.RED + Style.BRIGHT,    # Rosso brillante
+        'rullante': Fore.YELLOW + Style.BRIGHT, # Giallo brillante
+        'hihat':    Fore.CYAN,                  # Ciano
+        'openhat':  Fore.CYAN + Style.BRIGHT,   # Ciano brillante
+        'crash':    Fore.MAGENTA + Style.BRIGHT,# Magenta brillante
+        'tom1':     Fore.GREEN,                 # Verde
+        'tom2':     Fore.GREEN + Style.BRIGHT   # Verde brillante
+    }
+
     hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
     #Input utente stile
     stiliDisponibili = list(vincoliStile.keys())
     print(f"Stili disponibili: {stiliDisponibili}")
     stileScelto = input("Inserisci lo stile desiderato: ").lower()
     if stileScelto not in stiliDisponibili:
-        print(f"Stile '{stileScelto}' non valido. Utilizzo stile 'rock' predefinito.")
-        stileScelto = "rock"
+        print(f"Stile '{stileScelto}' non valido. Utilizzo stile 'pop' predefinito.")
+        stileScelto = "pop"
 
     #Richiesta parametri
     funzioneParametri = parametriPerStile.get(stileScelto)
@@ -248,26 +293,76 @@ while True:
 
     #sat e Visualizzazione
     print("Cercando la soluzione ottimale")
+    
+ 
+
     if optimizer.check() == sat:
         model = optimizer.model()
+        print(f"\nRitmo generato per stile: {stileScelto} (soluzione ottimale):")
+        print("-" * 55)
+        
+        # Dizionario dei simboli per ogni strumento
+        simboli = {
+            'crash': 'C', 'openhihat':  'O', 'hihat': 'H', 
+            'rullante': 'S', 'tom1': '1', 'tom2': '2', 'cassa': 'K'
+        }
+        
+        # Lista degli strumenti nell'ordine in cui vuoi stamparli
+        ordine_stampa = ['crash', 'openhihat', 'hihat', 'rullante', 'cassa', 'tom1', 'tom2']
+        
+        # Itera su ogni strumento e stampa la sua riga
+        for nome_strumento in ordine_stampa:
+            # Fissa la lunghezza del nome per un allineamento perfetto
+            etichetta = f"{nome_strumento.capitalize():<9}: "
+            riga = etichetta
+            
+            colore_strumento = colori.get(nome_strumento, Fore.WHITE)
 
-        print(f"\nRitmo generato per stile: {stileScelto} (una soluzione valida):")
-        print()
-        for t in range(16):    
-            k = 'K ' if is_true(model.evaluate(cassa[t])) else '_ '
-            s = 'S ' if is_true(model.evaluate(rullante[t])) else '_ '
-            if is_true(model.evaluate(crash[t])):
-                h = 'C '
-            elif is_true(model.evaluate(hihat[t])):
-                h = 'H '
-            else:
-                h = '_ '
+            for t in range(16):
+                simbolo_da_stampare = simboli[nome_strumento]
+                
+                if is_true(model.evaluate(strumenti[nome_strumento][t])):
+                # Applica il colore prima del simbolo
+                    riga += f"{colore_strumento}{simbolo_da_stampare}   "
+                else:
 
-            print(f"{h}{k}{s}", end="  ")
-            if (t + 1) % 4 == 0:
-                print("| ", end="")
-        print()
-        print("1       i       e       a       | 2       i       e       a       | 3       i       e       a       | 4       i       e       a       |") 
+                    # Il punto rimane del colore di default grazie a autoreset=True
+                    riga += f'{Fore.WHITE}_   '
+                
+                # Aggiungi il separatore di battuta
+                if (t + 1) % 4 == 0 and t < 15:
+                    riga += f"{Fore.WHITE}|   "
+            print(riga)
+            print(end="\n") 
+            
+        # Stampa la guida ritmica
+        print("-" * 100)
+        print("Tempo:     1   e   &   a   |   2   e   &   a   |   3   e   &   a   |   4   e   &   a")
+        print("-" * 100)
 
     else:
         print(f"Nessuna soluzione trovata per {stileScelto}.")
+        
+    # if optimizer.check() == sat:
+    #     model = optimizer.model()
+
+    #     print(f"\nRitmo generato per stile: {stileScelto} (una soluzione valida):")
+    #     print()
+    #     for t in range(16):    
+    #         k = 'K ' if is_true(model.evaluate(cassa[t])) else '_ '
+    #         s = 'S ' if is_true(model.evaluate(rullante[t])) else '_ '
+    #         if is_true(model.evaluate(crash[t])):
+    #             h = 'C '
+    #         elif is_true(model.evaluate(hihat[t])):
+    #             h = 'H '
+    #         else:
+    #             h = '_ '
+
+    #         print(f"{h}{k}{s}", end="  ")
+    #         if (t + 1) % 4 == 0:
+    #             print("| ", end="")
+    #     print()
+    #     print("1       i       e       a       | 2       i       e       a       | 3       i       e       a       | 4       i       e       a       |") 
+
+    # else:
+    #     print(f"Nessuna soluzione trovata per {stileScelto}.")
