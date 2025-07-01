@@ -166,7 +166,7 @@ def vincoliPop(optimizer, strumenti, params):
                 optimizer.add(hihat[t] == True)
     else: # Default a ottavi
         print("Pattern Hi-Hat impostato a Ottavi.")
-        for t in [0, 2, 4, 6, 8, 10, 12]: # Escludo il 14!
+        for t in [2, 4, 6, 8, 10, 12]: # Escludo il 14!
             optimizer.add(hihat[t] == True)
 
 
@@ -186,27 +186,11 @@ def vincoliPop(optimizer, strumenti, params):
     for t in [7, 15]: # '2a' e '4a'
         aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.densitaSincopiCassa)
         aggiungiPreferenza(optimizer, rullante[t] == True, peso=params.densitaSincopiRullante)
-        optimizer.add(Implies(cassa[t], Not(rullante[t]))) # Se suono la cassa, non suono il rullante (e viceversa)
+        optimizer.add(Or(Not(cassa[t]), Not(rullante[t])))
     
 
 def vincoliJazz(optimizer, strumenti, params):
-    hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
-    optimizer.add(hihat[4] == True)
-    optimizer.add(hihat[12] == True)
-    optimizer.add(Implies(hihat[4], Not(rullante[4])))
-    optimizer.add(Implies(hihat[12], Not(rullante[12])))
-    for t in [0, 4, 8, 12]:
-        aggiungiPreferenza(optimizer, hihat[t] == True, peso=int(params.forzaSwing * 0.9))
-        aggiungiPreferenza(optimizer, hihat[t + 2] == True, peso=params.forzaSwing)
-        aggiungiPreferenza(optimizer, hihat[t + 1] == False, peso=int(params.forzaSwing * 0.8))
-    for t in range(16):
-        if t not in [4, 12]:
-            aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.densitaComping)
-            aggiungiPreferenza(optimizer, rullante[t] == True, peso=int(params.densitaComping * 0.7))
-    for t in range(16):
-        aggiungiPreferenza(optimizer, cassa[t] == False, peso=params.preferenzaSilenzio)
-        aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
-
+    return 0
 
 def vincoliBlues(optimizer, strumenti, params):
     hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
