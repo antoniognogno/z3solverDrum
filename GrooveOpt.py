@@ -2,7 +2,9 @@ import random
 from z3 import *
 from z3 import Optimize
 
+from music21 import *
 from colorama import init, Fore, Style
+import threading 
 
 # Inizializza colorama per funzionare anche su Windows
 init(autoreset=True)
@@ -27,6 +29,7 @@ class ParametriStile:
 # =======================================================
 # 1. Procedure/Funzioni ausiliarie
 # =======================================================
+
 def aggiungiPreferenza(optimizer, espressioneBooleana, peso):
     if peso > 0:
         optimizer.add_soft(espressioneBooleana, weight=peso)
@@ -47,7 +50,6 @@ def valoreInput(messaggio, default):
         return default
 
 def valoreInputBooleano(messaggio, defaultChar):
-    #Chiede un booleana all'utente (es. 's'/'o')."""
     scelta = input(f"- {messaggio} (default: {defaultChar}): ").lower().strip()
     if not scelta:
         return defaultChar
@@ -57,6 +59,7 @@ def valoreInputBooleano(messaggio, defaultChar):
 # =======================================================
 # 2. Parametri per stile
 # =======================================================
+
 def parametriRock():
     print("\nPersonalizza i Pesi per lo Stile ROCK")
     params = ParametriStile()
@@ -87,11 +90,14 @@ def parametriJazz():
 
 
 def parametriBlues():
-    print("\nPersonalizza i Pesi per lo Stile BLUES")
+    print("\n--- Personalizza i Pesi per lo Stile BLUES ---")
     params = ParametriStile()
-    params.forzaSwing = valoreInput("Definizione dello Shuffle", params.forzaSwing)
-    params.forzaDoppiaCassaFinale = valoreInput("Forza Rullante su 2 & 4", params.forzaDoppiaCassaFinale)
-    params.densitaSincopi = valoreInput("Presenza di sincopi (pickup)", params.densitaSincopi)
+    params.forzaSwing = valoreInput("Definizione dello Shuffle sui piatti", 90)
+    params.forzaDownbeat = valoreInput("Forza della Cassa su 1 & 3", 95)
+    params.forzaBackbeat = valoreInput("Forza del Rullante su 2 & 4", 98)
+    params.densitaSincopi = valoreInput("Presenza del 'pickup' di cassa (su 4a)", 40)
+    params.preferenzaSilenzio = valoreInput("Tendenza al silenzio", 30)
+    params.forzaCrash = valoreInput("Forza del Crash iniziale (t=0) (>90 se vuoi inserirlo)", 95)
     return params
 
 # =======================================================
@@ -99,6 +105,7 @@ def parametriBlues():
 # =======================================================
 
 def vincoliRock(optimizer, strumenti, params):
+    
     hihat = strumenti['hihat']
     rullante = strumenti['rullante']
     cassa = strumenti['cassa']
@@ -139,7 +146,6 @@ def vincoliRock(optimizer, strumenti, params):
             aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
 
 
-#Bugs: il crash e l'OpenHIhat non sono gestiti correttamente e suonano sempre
 def vincoliPop(optimizer, strumenti, params):
 
     cassa = strumenti['cassa']
@@ -148,18 +154,17 @@ def vincoliPop(optimizer, strumenti, params):
     openhihat = strumenti['openhihat']
     crash = strumenti['crash']
 
+    posOpenHiHat = 14
+    posCrash = 0
 
-    # 1. Cassa in quarti.
+    #Cassa in quarti.
     for t in [0, 4, 8, 12]:
         optimizer.add(cassa[t] == True)
         
-    # 2. Rullante su 2 e 4.
+    #Rullante su 2 e 4.
     for t in [4, 12]:
         optimizer.add(rullante[t] == True)
 
-    # 3. Definiamo la posizione dell'open hi-hat per chiarezza
-    posOpenHiHat = 14
-    posCrash = 0
 
     if params.patternHiHat == 's':
         print("Pattern Hi-Hat impostato a 16esimi.")
@@ -168,7 +173,7 @@ def vincoliPop(optimizer, strumenti, params):
                 optimizer.add(hihat[t] == True)
     else: # Default a ottavi
         print("Pattern Hi-Hat impostato a Ottavi.")
-        for t in [2, 4, 6, 8, 10, 12]: # Escludo il 14!
+        for t in [2, 4, 6, 8, 10, 12]: # Escludo il 14
             optimizer.add(hihat[t] == True)
 
 
@@ -178,12 +183,12 @@ def vincoliPop(optimizer, strumenti, params):
     optimizer.add(Implies(openhihat[posOpenHiHat] == True, And(Not(hihat[posOpenHiHat]), Not(hihat[posOpenHiHat + 1])))) # Se suono l'open hi-hat, non suono l'hihat chiuso (neanche sul successivo)
     optimizer.add(Implies(Not(openhihat[posOpenHiHat]), hihat[posOpenHiHat] == True)) # Se non suono l'open hi-hat, suono l'hihat chiuso
 
-    # 7. Preferenza per il Crash 
+    #Preferenza per il Crash 
     aggiungiPreferenza(optimizer, crash[posCrash] == True, peso=params.forzaCrash)
-    optimizer.add(Implies(crash[posCrash], Not(hihat[posCrash])))
-    optimizer.add(Implies(Not(crash[posCrash]), hihat[posCrash] == True))
+    optimizer.add(Implies(crash[posCrash], Not(hihat[posCrash]))) 
+    optimizer.add(Implies(Not(crash[posCrash]), hihat[posCrash] == True)) 
     
-    # 8. Sincopi di cassa per rendere il ritmo più movimentato
+    #Sincopi di cassa per rendere il ritmo più movimentato
     for t in [7, 15]: # '2a' e '4a'
         aggiungiPreferenza(optimizer, cassa[t] == True, peso=params.densitaSincopiCassa)
         aggiungiPreferenza(optimizer, rullante[t] == True, peso=params.densitaSincopiRullante)
@@ -215,14 +220,14 @@ def vincoliJazz(optimizer, strumenti, params):
     for t in [4, 12]:
         optimizer.add(hihat[t] == True) # Chick secco sul 2 e 4
         
-        # In questi punti, la cassa e il rullante e i toms non devono suonare.
+        #In questi punti, la cassa e il rullante e i toms non devono suonare.
         optimizer.add(cassa[t] == False)
         optimizer.add(rullante[t] == False)
         optimizer.add(strumenti['tom1'][t] == False)
         optimizer.add(strumenti['tom2'][t] == False)
     
     for t in range(15): # Fino al penultimo tempo
-        # È fortemente preferibile che cassa[t] e cassa[t+1] non siano entrambi True
+        #È fortemente preferibile che cassa[t] e cassa[t+1] non siano entrambi True
         aggiungiPreferenza(optimizer, Not(And(cassa[t], cassa[t+1])), peso=90)
     
         #Ghost notes per il rullante
@@ -234,14 +239,14 @@ def vincoliJazz(optimizer, strumenti, params):
         aggiungiPreferenza(optimizer, ride[t + 2] == True, peso=params.forzaSwing)
         aggiungiPreferenza(optimizer, ride[t + 1] == False, peso=params.forzaSwing)
 
-    # 1. Vincolo di cardinalità per i tamburi: al massimo 2 alla volta
+    #Al massimo 2 tamburi alla volta (abbiamo 2 mani)
     for t in range(16):
         optimizer.add(AtMost(rullante[t], tom1[t], tom2[t], 2))
 
-    # 2. Logica del Comping Sparso
+    #Comping Sparso
     probabilitaCompingCassa = params.densitaComping / 100.0
     probabilitaCompingRullante = (params.densitaComping * 0.7) / 100.0
-    # La densità dei tom è derivata da quella generale
+    #La densità dei tom è derivata da quella generale
     probabilitaCompingTom1 = (params.densitaComping * 0.5) / 100.0
     probabilitaCompingTom2 = (params.densitaComping * 0.4) / 100.0
 
@@ -260,7 +265,7 @@ def vincoliJazz(optimizer, strumenti, params):
             if random.random() < probabilitaCompingTom2:
                 aggiungiPreferenza(optimizer, tom2[t] == True, peso=40)
 
-    # 4. Preferenza Generale per il Silenzio
+    #Preferenza Generale per il Silenzio
     for t in range(16):
         aggiungiPreferenza(optimizer, cassa[t] == False, peso=params.preferenzaSilenzio)
         aggiungiPreferenza(optimizer, rullante[t] == False, peso=params.preferenzaSilenzio)
@@ -268,21 +273,136 @@ def vincoliJazz(optimizer, strumenti, params):
         aggiungiPreferenza(optimizer, tom2[t] == False, peso=params.preferenzaSilenzio)
 
 def vincoliBlues(optimizer, strumenti, params):
-    hihat, rullante, cassa, crash = strumenti['hihat'], strumenti['rullante'], strumenti['cassa'], strumenti['crash']
-    for t in [0, 4, 8, 12]:
-        aggiungiPreferenza(optimizer, hihat[t] == True, peso=params.forzaSwing)
-        aggiungiPreferenza(optimizer, hihat[t + 2] == True, peso=params.forzaSwing)
-        aggiungiPreferenza(optimizer, hihat[t + 1] == False, peso=int(params.forzaSwing * 0.8))
+    cassa = strumenti['cassa']
+    rullante = strumenti['rullante']
+    hihat = strumenti['hihat']
+    ride = strumenti['ride']
+    crash = strumenti['crash']
+    openhihat = strumenti['openhihat']
+    tom1 = strumenti['tom1']
+    tom2 = strumenti['tom2']
 
-    aggiungiPreferenza(optimizer, cassa[0] == True, peso=params.forzaDoppiaCassa)
-    aggiungiPreferenza(optimizer, cassa[8] == True, peso=params.forzaDoppiaCassa)
-    aggiungiPreferenza(optimizer, rullante[4] == True, peso=params.forzaDoppiaCassaFinale)
-    aggiungiPreferenza(optimizer, rullante[12] == True, peso=params.forzaDoppiaCassaFinale)
+    #Il rullante deve essere sul 2 e sul 4.
+    optimizer.add(rullante[4] == True)
+    optimizer.add(rullante[12] == True)
+    
+    #Esclusione fisica tra i piatti.  
+    for t in range(16):
+        optimizer.add(AtMost(ride[t], hihat[t], openhihat[t], crash[t], 1))
+
+
+    for t in [0, 4, 8, 12]:
+        # Preferenza per il colpo sul quarto
+        aggiungiPreferenza(optimizer, hihat[t] == True, peso=params.forzaSwing)
+        # Preferenza per il colpo sulla terzina
+        aggiungiPreferenza(optimizer, hihat[t + 2] == True, peso=params.forzaSwing)
+        # Preferenza per il silenzio in mezzo
+        aggiungiPreferenza(optimizer, hihat[t + 1] == False, peso=params.forzaSwing)
+
+    #Cassa sui Downbeat (1 e 3). È una preferenza forte, non una regola fissa
+    aggiungiPreferenza(optimizer, cassa[0] == True, peso=params.forzaDownbeat)
+    aggiungiPreferenza(optimizer, cassa[8] == True, peso=params.forzaDownbeat)
     aggiungiPreferenza(optimizer, cassa[15] == True, peso=params.densitaSincopi)
+
+    #Accento con il Crash. Opzionale, per iniziare un nuovo giro.
+    aggiungiPreferenza(optimizer, crash[0] == True, peso=params.forzaCrash)
+
+    for t in range(16):
+        # Silenzio per la cassa
+        if t not in [0, 8, 15]:
+            aggiungiPreferenza(optimizer, cassa[t] == False, peso=params.preferenzaSilenzio)
+        
+        # Silenzio per i piatti non coinvolti nello shuffle
+        if t not in [0, 2, 8, 10]:
+            aggiungiPreferenza(optimizer, hihat[t] == False, peso=params.preferenzaSilenzio)
+        
+        # Silenzio per il crash (tranne all'inizio)
+        if t != 0:
+            aggiungiPreferenza(optimizer, crash[t] == False, peso=95)
 
 # =======================================================
 # 4. Main Program
 # =======================================================
+
+def esporta_in_midi(modello_z3, strumenti, bpm=90, numero_battute=4, mostra_partitura=False, titolo="Ritmo Generato da Z-Groove", autore="Z-Groove"):
+    try:
+        eventi_battuta_base = []
+        mappa_percussioni = {
+            'cassa': pitch.Pitch('B1'),
+            'rullante': pitch.Pitch('D2'),
+            'hihat': pitch.Pitch('F#2'),
+            'openhat': pitch.Pitch('A#2'),
+            'crash': pitch.Pitch('A3'),
+            'ride': pitch.Pitch('D#3'),
+            'tom1': pitch.Pitch('B2'),
+            'tom2': pitch.Pitch('F2')
+        }
+        
+        for t in range(16):
+            offset = t * 0.25
+            note_simultanee = []
+            for nome_strumento, lista_note in strumenti.items():
+                if nome_strumento in mappa_percussioni and is_true(modello_z3.evaluate(lista_note[t])):
+                    p = mappa_percussioni[nome_strumento]
+                    n = note.Note(p)
+                    n.duration.quarterLength = 0.25
+                    n.volume.velocity = 110 if t % 4 == 0 else 90
+                    note_simultanee.append(n)
+            
+            if note_simultanee:
+                colpo = chord.Chord(note_simultanee) if len(note_simultanee) > 1 else note_simultanee[0]
+                # Aggiungiamo l'evento alla nostra lista
+                eventi_battuta_base.append((offset, colpo))
+        
+        partitura = stream.Score()
+
+        partitura.metadata = metadata.Metadata()
+        partitura.metadata.title = titolo
+        partitura.metadata.composer = autore 
+        
+        
+
+        parte_batteria = stream.Part()
+        
+        # Inseriamo gli elementi di setup una sola volta all'inizio
+        parte_batteria.insert(0, instrument.Percussion()) # Questo gestirà il canale 10
+        parte_batteria.insert(0, tempo.MetronomeMark(number=bpm))
+
+        print(f"-> Replicando il ritmo per {numero_battute} battute...")
+        
+        for i in range(numero_battute):
+            # Calcoliamo l'offset di inizio di questa battuta
+            offset_battuta_corrente = i * 4.0
+            
+            # Iteriamo sulla nostra lista di eventi e li inseriamo
+            for offset_evento, colpo_originale in eventi_battuta_base:
+                # Creiamo una copia profonda dell'oggetto nota/accordo
+                colpo_da_inserire = copy.deepcopy(colpo_originale)
+                
+                # Inseriamo la copia nella parte finale, all'offset globale corretto
+                parte_batteria.insert(offset_battuta_corrente + offset_evento, colpo_da_inserire)
+            
+        partitura.insert(0, parte_batteria)
+        
+        if mostra_partitura:
+            print("Aprendo la partitura con il software predefinito...")
+            def apri_musescore():
+                try:
+                    # Copiamo la partitura per assicurarci che sia "thread-safe"
+                    partitura_da_mostrare = copy.deepcopy(partitura)
+                    partitura_da_mostrare.show()
+                    print(f"{Fore.CYAN}-> MuseScore è stato avviato. Puoi continuare a usare il generatore.")
+                except Exception as e:
+                    print(f"{Fore.RED}Errore nel thread di visualizzazione: {e}")
+
+        # Creiamo e avviamo il thread.
+        # 'daemon=True' assicura che il thread si chiuda quando il programma principale termina.
+        thread_musescore = threading.Thread(target=apri_musescore, daemon=True)
+        thread_musescore.start()
+
+    except Exception as e:
+        print(f"\n{Fore.RED}Si è verificato un errore durante l'esportazione: {e}")
+        traceback.print_exc()
 
 while True:
     print("\n--- Generatore di Ritmi per Batteria ---")
@@ -317,7 +437,7 @@ while True:
         'cassa':   Fore.RED + Style.BRIGHT,    # Rosso brillante
         'rullante': Fore.YELLOW + Style.BRIGHT, # Giallo brillante
         'hihat':    Fore.CYAN,                  # Ciano
-        'openhat':  Fore.CYAN + Style.BRIGHT,   # Ciano brillante
+        'openhihat':  Fore.CYAN + Style.BRIGHT,   # Ciano brillante
         'crash':    Fore.MAGENTA + Style.BRIGHT,# Magenta brillante
         'tom1':     Fore.GREEN,                 # Verde
         'tom2':     Fore.GREEN + Style.BRIGHT,   # Verde brillante
@@ -330,8 +450,8 @@ while True:
     print(f"Stili disponibili: {stiliDisponibili}")
     stileScelto = input("Inserisci lo stile desiderato: ").lower()
     if stileScelto not in stiliDisponibili:
-        print(f"Stile '{stileScelto}' non valido. Utilizzo stile 'pop' predefinito.")
-        stileScelto = "jazz"
+        print(f"Stile '{stileScelto}' non valido. Utilizzo stile 'rock' predefinito.")
+        stileScelto = "rock"
 
     #Richiesta parametri
     funzioneParametri = parametriPerStile.get(stileScelto)
@@ -342,7 +462,7 @@ while True:
     #Vincoli generici
     print(f"\nApplicando vincoli generici:")
     for t in range(16):
-        optimizer.add(Implies(strumenti['crash'][t], Not(strumenti['hihat'][t]))) #Se suono il crash, non suono l'hihat
+        optimizer.add(Implies(crash[t], Not(hihat[t]))) #Se suono il crash, non suono l'hihat
         
 
     funzioneVincoli = vincoliStile.get(stileScelto)
@@ -356,17 +476,22 @@ while True:
     #sat e Visualizzazione
     print("Cercando la soluzione ottimale")
     
- 
-
     if optimizer.check() == sat:
         model = optimizer.model()
+        
         print(f"\nRitmo generato per stile: {stileScelto} (soluzione ottimale):")
         print("-" * 55)
         
         # Dizionario dei simboli per ogni strumento
         simboli = {
-            'crash': 'C', 'openhihat':  'O', 'hihat': 'H', 
-            'rullante': 'S', 'tom1': '1', 'tom2': '2', 'cassa': 'K', 'ride': 'R'
+            'crash': 'C',
+            'openhihat':  'O',
+            'hihat': 'H',
+            'rullante': 'S', 
+            'tom1': '1', 
+            'tom2': '2', 
+            'cassa': 'K', 
+            'ride': 'R'
         }
         
         # Lista degli strumenti nell'ordine in cui vuoi stamparli
@@ -402,29 +527,55 @@ while True:
         print("Tempo:     1   e   &   a   |   2   e   &   a   |   3   e   &   a   |   4   e   &   a")
         print("-" * 100)
 
+        # Chiedi se esportare in MIDI
+        scelta_show = valoreInputBooleano("Vuoi aprire la partitura in MuseScore?", 's')
+        
+        if scelta_show == 's':
+            # Chiedi i BPM usando la tua funzione ausiliaria
+            bpm_utente = valoreInput("Inserisci i BPM (battiti per minuto)", 75)
+            
+
+            info_parametri = []
+            # Aggiunge i parametri rilevanti per ogni stile
+            if stileScelto == 'rock':
+                info_parametri.append(f"DoppiaCassa: {parametriUtente.forzaDoppiaCassa}")
+                info_parametri.append(f"Pickup: {parametriUtente.forzaDoppiaCassaFinale}")
+                info_parametri.append(f"Crash: {parametriUtente.forzaCrash}")
+                info_parametri.append(f"Sincopi: {parametriUtente.densitaSincopi}")
+                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+            elif stileScelto == 'pop':
+                info_parametri.append(f"PatternHH: '{parametriUtente.patternHiHat}'")
+                info_parametri.append(f"Open Hi-Hat: {parametriUtente.forzaOpenHiHat}")
+                info_parametri.append(f"Sincopi Cassa: {parametriUtente.densitaSincopiCassa}")
+                info_parametri.append(f"Sincopi Rullante: {parametriUtente.densitaSincopiRullante}")
+                info_parametri.append(f"Crash: {parametriUtente.forzaCrash}")
+                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+            elif stileScelto == 'jazz':
+                info_parametri.append(f"Swing: {parametriUtente.forzaSwing}")
+                info_parametri.append(f"Comping: {parametriUtente.densitaComping}")
+                info_parametri.append(f"Toms: {parametriUtente.densitaToms}")
+                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+            elif stileScelto == 'blues':
+                info_parametri.append(f"Shuffle: {parametriUtente.forzaSwing}")
+                info_parametri.append(f"Downbeat: {parametriUtente.forzaDownbeat}")
+                info_parametri.append(f"Backbeat: {parametriUtente.forzaBackbeat}")
+                info_parametri.append(f"Pickup: {parametriUtente.densitaSincopi}")
+                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+            
+            # Unisce le informazioni in una singola stringa
+            stringa_parametri = ", ".join(info_parametri)
+            
+            titolo_completo = f"{stileScelto.capitalize()} ({stringa_parametri})"
+            autore_scelto = "Antonio Iorio"
+
+            # Chiedi se visualizzare usando la tua funzione ausiliaria
+            mostra_spartito = (scelta_show == 's')
+            
+            # Crea un nome di file unico e chiama la funzione di esportazione
+            esporta_in_midi(model, strumenti, bpm=bpm_utente, mostra_partitura=mostra_spartito, titolo=titolo_completo,
+            autore=autore_scelto)
+
+
     else:
         print(f"Nessuna soluzione trovata per {stileScelto}.")
         
-    # if optimizer.check() == sat:
-    #     model = optimizer.model()
-
-    #     print(f"\nRitmo generato per stile: {stileScelto} (una soluzione valida):")
-    #     print()
-    #     for t in range(16):    
-    #         k = 'K ' if is_true(model.evaluate(cassa[t])) else '_ '
-    #         s = 'S ' if is_true(model.evaluate(rullante[t])) else '_ '
-    #         if is_true(model.evaluate(crash[t])):
-    #             h = 'C '
-    #         elif is_true(model.evaluate(hihat[t])):
-    #             h = 'H '
-    #         else:
-    #             h = '_ '
-
-    #         print(f"{h}{k}{s}", end="  ")
-    #         if (t + 1) % 4 == 0:
-    #             print("| ", end="")
-    #     print()
-    #     print("1       i       e       a       | 2       i       e       a       | 3       i       e       a       | 4       i       e       a       |") 
-
-    # else:
-    #     print(f"Nessuna soluzione trovata per {stileScelto}.")
