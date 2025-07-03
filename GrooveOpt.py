@@ -512,8 +512,6 @@ while True:
                 # Applica il colore prima del simbolo
                     riga += f"{colore_strumento}{simbolo_da_stampare}   "
                 else:
-
-                    # Il punto rimane del colore di default grazie a autoreset=True
                     riga += f'{Fore.WHITE}_   '
                 
                 # Aggiungi il separatore di battuta
@@ -522,7 +520,7 @@ while True:
             print(riga)
             print(end="\n") 
             
-        # Stampa la guida ritmica
+
         print("-" * 100)
         print("Tempo:     1   e   &   a   |   2   e   &   a   |   3   e   &   a   |   4   e   &   a")
         print("-" * 100)
@@ -531,49 +529,56 @@ while True:
         scelta_show = valoreInputBooleano("Vuoi aprire la partitura in MuseScore?", 's')
         
         if scelta_show == 's':
-            # Chiedi i BPM usando la tua funzione ausiliaria
-            bpm_utente = valoreInput("Inserisci i BPM (battiti per minuto)", 75)
+            # Chiedi i BPM 
+            bpmUtente = input("Inserisci i BPM (battiti per minuto) default: 75): ")
+            if not bpmUtente.strip():
+                bpmUtente = 75  # Default se l'input è vuoto
+            try:
+                bpmUtente = int(bpmUtente)
+            except ValueError:
+                print(f"Input '{bpmUtente}' non è un numero valido. Verrà usato il default: 75")
+                bpmUtente = 75
             
 
-            info_parametri = []
+            infoParametri = []
             # Aggiunge i parametri rilevanti per ogni stile
             if stileScelto == 'rock':
-                info_parametri.append(f"DoppiaCassa: {parametriUtente.forzaDoppiaCassa}")
-                info_parametri.append(f"Pickup: {parametriUtente.forzaDoppiaCassaFinale}")
-                info_parametri.append(f"Crash: {parametriUtente.forzaCrash}")
-                info_parametri.append(f"Sincopi: {parametriUtente.densitaSincopi}")
-                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+                infoParametri.append(f"DoppiaCassa: {parametriUtente.forzaDoppiaCassa}")
+                infoParametri.append(f"Pickup: {parametriUtente.forzaDoppiaCassaFinale}")
+                infoParametri.append(f"Crash: {parametriUtente.forzaCrash}")
+                infoParametri.append(f"Sincopi: {parametriUtente.densitaSincopi}")
+                infoParametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
             elif stileScelto == 'pop':
-                info_parametri.append(f"PatternHH: '{parametriUtente.patternHiHat}'")
-                info_parametri.append(f"Open Hi-Hat: {parametriUtente.forzaOpenHiHat}")
-                info_parametri.append(f"Sincopi Cassa: {parametriUtente.densitaSincopiCassa}")
-                info_parametri.append(f"Sincopi Rullante: {parametriUtente.densitaSincopiRullante}")
-                info_parametri.append(f"Crash: {parametriUtente.forzaCrash}")
-                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+                infoParametri.append(f"PatternHH: '{parametriUtente.patternHiHat}'")
+                infoParametri.append(f"Open Hi-Hat: {parametriUtente.forzaOpenHiHat}")
+                infoParametri.append(f"Sincopi Cassa: {parametriUtente.densitaSincopiCassa}")
+                infoParametri.append(f"Sincopi Rullante: {parametriUtente.densitaSincopiRullante}")
+                infoParametri.append(f"Crash: {parametriUtente.forzaCrash}")
+                infoParametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
             elif stileScelto == 'jazz':
-                info_parametri.append(f"Swing: {parametriUtente.forzaSwing}")
-                info_parametri.append(f"Comping: {parametriUtente.densitaComping}")
-                info_parametri.append(f"Toms: {parametriUtente.densitaToms}")
-                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+                infoParametri.append(f"Swing: {parametriUtente.forzaSwing}")
+                infoParametri.append(f"Comping: {parametriUtente.densitaComping}")
+                infoParametri.append(f"Toms: {parametriUtente.densitaToms}")
+                infoParametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
             elif stileScelto == 'blues':
-                info_parametri.append(f"Shuffle: {parametriUtente.forzaSwing}")
-                info_parametri.append(f"Downbeat: {parametriUtente.forzaDownbeat}")
-                info_parametri.append(f"Backbeat: {parametriUtente.forzaBackbeat}")
-                info_parametri.append(f"Pickup: {parametriUtente.densitaSincopi}")
-                info_parametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
+                infoParametri.append(f"Shuffle: {parametriUtente.forzaSwing}")
+                infoParametri.append(f"Downbeat: {parametriUtente.forzaDownbeat}")
+                infoParametri.append(f"Backbeat: {parametriUtente.forzaBackbeat}")
+                infoParametri.append(f"Pickup: {parametriUtente.densitaSincopi}")
+                infoParametri.append(f"Silenzio: {parametriUtente.preferenzaSilenzio}")
             
             # Unisce le informazioni in una singola stringa
-            stringa_parametri = ", ".join(info_parametri)
+            stringaParametri = ", ".join(infoParametri)
             
-            titolo_completo = f"{stileScelto.capitalize()} ({stringa_parametri})"
-            autore_scelto = "Antonio Iorio"
+            titoloCompleto = f"{stileScelto.capitalize()} ({stringaParametri})"
+            autoreScelto = "Antonio Iorio"
 
             # Chiedi se visualizzare usando la tua funzione ausiliaria
             mostra_spartito = (scelta_show == 's')
             
             # Crea un nome di file unico e chiama la funzione di esportazione
-            esporta_in_midi(model, strumenti, bpm=bpm_utente, mostra_partitura=mostra_spartito, titolo=titolo_completo,
-            autore=autore_scelto)
+            esporta_in_midi(model, strumenti, bpm=bpmUtente, mostra_partitura=mostra_spartito, titolo=titoloCompleto,
+            autore=autoreScelto)
 
 
     else:
